@@ -21,7 +21,7 @@ import websockets
 
 # complete
 
-information = {}
+information = {"x":0, "y":0, "z":0, "xr":0, "yr":0}
 
 async def process_command(websocket, path):
 	async for command in websocket:
@@ -44,7 +44,7 @@ async def process_command(websocket, path):
 	print(information)
 
 
-start_server = websockets.serve(process_command, '172.31.73.76', 8765)
+start_server = websockets.serve(process_command, '172.31.68.73', 8765)
 
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()

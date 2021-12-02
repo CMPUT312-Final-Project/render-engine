@@ -12,23 +12,56 @@ import asyncio
 import websockets
 
 
-values = [0,0,0]
+values = [0,0,0,0,0]
+offsets = [-1.5, -16, -6, 0, 0]
+server_address = 'ws://172.31.68.73:8765'
 
 async def getPositionAndRotation():
-	infoNeeded = ['x','y','z']
+	infoNeeded = ['x','y','z','xr','yr']
 	for i in range(len(infoNeeded)):
 		name = infoNeeded[i]
-		async with websockets.connect('ws://172.31.73.76:8765') as websocket:
+		async with websockets.connect(server_address) as websocket:
 			await websocket.send("get"+name)
 			value = await websocket.recv()
 			#print("Got " + name + " (" + value + ")")
 			values[i] = float(value)
 
+def inputEvent(window, key, scancode, action, mods):
+	increment = 0.5
+	z_increment = 2
+	if action == glfw.PRESS:
+		if key == glfw.KEY_W:
+			offsets[1] += increment
+		elif key == glfw.KEY_S:
+			offsets[1] -= increment
+		elif key == glfw.KEY_A:
+			offsets[0] += increment
+		elif key == glfw.KEY_D:
+			offsets[0] -= increment
+		elif key == glfw.KEY_Q:
+			offsets[2] += z_increment
+		elif key == glfw.KEY_E:
+			offsets[2] -= z_increment
+		elif key == glfw.KEY_UP:
+			offsets[3] += 0.01
+		elif key == glfw.KEY_DOWN:
+			offsets[3] -= 0.01
+		elif key == glfw.KEY_LEFT:
+			offsets[4] += 0.01
+		elif key == glfw.KEY_RIGHT:
+			offsets[4] -= 0.01
+		elif key == glfw.KEY_ESCAPE:
+			glfw.set_window_should_close(window, GL_TRUE)
+
 def createTransformationMatrix(xPos=0, yPos=0, zPos=0, xRotation=0, yRotation=0, zRotation=0):
 	rot_x = pyrr.Matrix44.from_x_rotation(xRotation)
 	rot_y = pyrr.Matrix44.from_y_rotation(yRotation)
-	rot_z = pyrr.Matrix44.from_y_rotation(zRotation)
-	transformationMatrix = rot_x * rot_y * rot_z
+	global_x = pyrr.Matrix44.from_x_rotation(5/180*math.pi)
+	#xv = pyrr.Vector3([1.0,0.0,0.0])
+	#xv = rot_y * xv
+	#rot_x = pyrr.Matrix44.create_from_axis_rotation(xv, xRotation)
+	# pyrr.matrix44.create_from_axis_rotation
+	transformationMatrix = rot_x @ rot_y
 	transformationMatrix[3][0] = xPos
 	transformationMatrix[3][1] = yPos
 	transformationMatrix[3][2] = zPos
@@ -42,47 +75,80 @@ def main():
 	display = [1920, 1080]
 
 	monitors = glfw.get_monitors()
-	window = glfw.create_window(display[0], display[1], "Pyopengl Perspective Projection", monitors[1], None)
+	active_monitor = monitors[1] # 1 = secondary
+	window = glfw.create_window(display[0], display[1], "Pyopengl Perspective Projection", active_monitor, None)
  
 	if not window:
 		glfw.terminate()
 		return
  
 	glfw.make_context_current(window)
+	half_cube_width = 7/2
 	#        positions         colors          texture coords
-	cube = [-0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
-			0.5, -0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
-			0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
-			-0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 1.0,
+	single_tex_cube = [-half_cube_width, -half_cube_width, half_cube_width, 1.0, 0.0, 0.0, 0.0, 0.0,
+			half_cube_width, -half_cube_width, half_cube_width, 0.0, 1.0, 0.0, 1.0, 0.0,
+			half_cube_width, half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 1.0, 1.0,
+			-half_cube_width, half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 0.0, 1.0,
  
-			-0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
-			0.5, -0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
-			0.5, 0.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
-			-0.5, 0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0,
+			-half_cube_width, -half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 0.0, 0.0,
+			half_cube_width, -half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 1.0, 0.0,
+			half_cube_width, half_cube_width, -half_cube_width, 0.0, 0.0, 1.0, 1.0, 1.0,
+			-half_cube_width, half_cube_width, -half_cube_width, 1.0, 1.0, 1.0, 0.0, 1.0,
  
-			0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
-			0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
-			0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
-			0.5, -0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 1.0,
+			half_cube_width, -half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 0.0, 0.0,
+			half_cube_width, half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 1.0, 0.0,
+			half_cube_width, half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 1.0, 1.0,
+			half_cube_width, -half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 0.0, 1.0,
  
-			-0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
-			-0.5, -0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
-			-0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
-			-0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 1.0,
+			-half_cube_width, half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 0.0, 0.0,
+			-half_cube_width, -half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 1.0, 0.0,
+			-half_cube_width, -half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 1.0, 1.0,
+			-half_cube_width, half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 0.0, 1.0,
  
-			-0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
-			0.5, -0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
-			0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
-			-0.5, -0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 1.0,
+			-half_cube_width, -half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 0.0, 0.0,
+			half_cube_width, -half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 1.0, 0.0,
+			half_cube_width, -half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 1.0, 1.0,
+			-half_cube_width, -half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 0.0, 1.0,
  
-			0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
-			-0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
-			-0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
-			0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 1.0]
-	# convert to 32bit float
+			half_cube_width, half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 0.0, 0.0,
+			-half_cube_width, half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 1.0, 0.0,
+			-half_cube_width, half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 1.0, 1.0,
+			half_cube_width, half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 0.0, 1.0]
+
+	tex_width = 384
+	tex_height = 512
+	multi_tex_cube = [-half_cube_width, -half_cube_width, half_cube_width, 1.0, 0.0, 0.0, 	128.0/tex_width, 128.0/tex_height,
+			half_cube_width, -half_cube_width, half_cube_width, 0.0, 1.0, 0.0, 				256.0/tex_width, 128.0/tex_height,
+			half_cube_width, half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 				256.0/tex_width, 0.0/tex_height,
+			-half_cube_width, half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 				128.0/tex_width, 0.0/tex_height,
+ 
+			-half_cube_width, -half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 			128.0/tex_width, 256.0/tex_height,
+			half_cube_width, -half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 			256.0/tex_width, 256.0/tex_height,
+			half_cube_width, half_cube_width, -half_cube_width, 0.0, 0.0, 1.0, 				256.0/tex_width, 384.0/tex_height,
+			-half_cube_width, half_cube_width, -half_cube_width, 1.0, 1.0, 1.0, 			128.0/tex_width, 384.0/tex_height,
+ 
+			half_cube_width, -half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 			256.0/tex_width, 256.0/tex_height,
+			half_cube_width, half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 				384.0/tex_width, 256.0/tex_height,
+			half_cube_width, half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 				384.0/tex_width, 128.0/tex_height,
+			half_cube_width, -half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 				256.0/tex_width, 128.0/tex_height,
+ 
+			-half_cube_width, half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 			0.0/tex_width, 256.0/tex_height,
+			-half_cube_width, -half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 			128.0/tex_width, 256.0/tex_height,
+			-half_cube_width, -half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 			128.0/tex_width, 128.0/tex_height,
+			-half_cube_width, half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 				0.0/tex_width, 128.0/tex_height,
+ 
+			-half_cube_width, -half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 			256.0/tex_width, 128.0/tex_height,
+			half_cube_width, -half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 			128.0/tex_width, 128.0/tex_height,
+			half_cube_width, -half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 				128.0/tex_width, 256.0/tex_height,
+			-half_cube_width, -half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 			256.0/tex_width, 256.0/tex_height,
+ 
+			half_cube_width, half_cube_width, -half_cube_width, 1.0, 0.0, 0.0, 				128.0/tex_width, 512.0/tex_height,
+			-half_cube_width, half_cube_width, -half_cube_width, 0.0, 1.0, 0.0, 			256.0/tex_width, 512.0/tex_height,
+			-half_cube_width, half_cube_width, half_cube_width, 0.0, 0.0, 1.0, 				256.0/tex_width, 384.0/tex_height,
+			half_cube_width, half_cube_width, half_cube_width, 1.0, 1.0, 1.0, 				128.0/tex_width, 384.0/tex_height]
  
  
-	cube = np.array(cube, dtype=np.float32)
+	cube = np.array(multi_tex_cube, dtype=np.float32)
  
 	indices = [0, 1, 2, 2, 3, 0,
 			   4, 5, 6, 6, 7, 4,
@@ -187,8 +253,22 @@ def main():
  
  
 	# load image
-	image = Image.open("rick_astley.jpg")
-	img_data = np.array(list(image.getdata()), np.uint8)
+	images_to_load = []
+	for i in range(26):
+		images_to_load.append("rick_anim/frame_"+str(i)+".jpg")
+	#images_to_load = ["rick_astley.jpg", "grass.jpg"]
+
+	images = []
+	imgs_data = []
+
+	for im in images_to_load:
+		image = Image.open(im)
+		images.append(image)
+		imgs_data.append(np.array(list(image.getdata()), np.uint8))
+
+	img_id = 0
+	image = images[img_id]
+	img_data = imgs_data[img_id]
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image.width, image.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
 	glEnable(GL_TEXTURE_2D)
  
@@ -199,8 +279,9 @@ def main():
  
  
 	#Creating Projection Matrix
-	view =pyrr.matrix44.create_from_translation(pyrr.Vector3([0.0,0.0,-100.0] ))
-	projection = pyrr.matrix44.create_perspective_projection(20.0, display[0]/display[1], 0.1, 100.0)
+	view = pyrr.matrix44.create_from_translation(pyrr.Vector3([0.0,6.0,-134.0]))
+	view = view @ pyrr.Matrix44.from_x_rotation((6.56/180*math.pi))
+	projection = pyrr.matrix44.create_perspective_projection(20, display[0]/display[1], 0.1, 1000.0)
 	model = pyrr.matrix44.create_from_translation(pyrr.Vector3([0.0,0.0,0.0]))
 
 	view_loc = glGetUniformLocation(shader, "view")
@@ -210,17 +291,27 @@ def main():
 	glUniformMatrix4fv(view_loc, 1, GL_FALSE, view)
 	glUniformMatrix4fv(proj_loc, 1, GL_FALSE, projection)
 	glUniformMatrix4fv(model_loc, 1, GL_FALSE, model)
- 
+
+	glfw.set_key_callback(window, inputEvent)
  
 	while not glfw.window_should_close(window):
+
+		img_id = int(glfw.get_time()/(1/5))%len(images_to_load)
+		image = images[img_id]
+		img_data = imgs_data[img_id]
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image.width, image.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+		glEnable(GL_TEXTURE_2D)
+
 		glfw.poll_events()
  
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
  
 		asyncio.get_event_loop().run_until_complete(getPositionAndRotation())
 
-		print(values)
-		transformation = createTransformationMatrix(values[0], values[1], values[2], 0.5*glfw.get_time(),0.8*glfw.get_time(),0.0)
+		print(offsets) # -3.6, -7.4, -59
+		transformation = createTransformationMatrix(-values[0]+offsets[0], values[1]+offsets[1], -values[2]+offsets[2], -values[3], -values[4], 0.0)
+		#transformation = createTransformationMatrix(-values[0]+offsets[0], values[1]+offsets[1], -values[2]+offsets[2], glfw.get_time()/5, glfw.get_time()/10, 0.0)
+		# -values[3]-(3/180*math.pi), -values[4]-(2/180*math.pi)
 
 		transformLoc = glGetUniformLocation(shader, "transform")
 		glUniformMatrix4fv(transformLoc, 1, GL_FALSE, transformation)
